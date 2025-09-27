@@ -1,0 +1,44 @@
+{
+  "compilerOptions": {
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.app.tsbuildinfo",
+    "target": "ES2022",
+    "useDefineForClassFields": true,
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "types": ["vite/client"],
+    "skipLibCheck": true,
+
+    /* Bundler mode */
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "moduleDetection": "force",
+    "noEmit": true,
+    "jsx": "react-jsx",
+
+    /* Linting */
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedSideEffectImports": true,
+
+    /* paths */
+    "baseUrl": ".",
+    "paths": {
+      "@/routes/*": ["./src/routes/*"],
+      "@/shared/*": ["./src/shared/*"],
+      "@/auth/*": ["./src/features/auth/*"],
+      "@/course/*": ["./src/features/course/*"],
+      "@/user/*": ["./src/features/user/*"]
+    }
+  },
+  "include": ["src"],
+  "exclude": [
+    "src/shared/api/**/*",
+    "src/**/*.old.ts",
+    "node_modules",
+    "dist",
+    "build"
+  ]
+}

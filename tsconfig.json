@@ -1,0 +1,17 @@
+{
+  "files": [],
+  "references": [
+    { "path": "./tsconfig.app.json" },
+    { "path": "./tsconfig.node.json" }
+  ],
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@/routes/*": ["./src/routes/*"],
+      "@/shared/*": ["./src/shared/*"],
+      "@/auth/*": ["./src/features/auth/*"],
+      "@/course/*": ["./src/features/course/*"],
+      "@/user/*": ["./src/features/user/*"]
+    }
+  }
+}
