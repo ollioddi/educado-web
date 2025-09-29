@@ -119,10 +119,15 @@ export default function usePaginatedData<T = unknown>({
 
     // Root query key resolution
     const rootKey = useMemo<(string | Record<string, unknown>)[]>(() => {
-        if (Array.isArray(queryKey))
+        console.debug('Computing rootKey from queryKey:', queryKey, 'and queryFn.name:', queryFn.name);
+        if (Array.isArray(queryKey)) {
             return queryKey.length > 0 ? queryKey : [queryFn.name];
-        if (typeof queryKey === "string" && queryKey.trim() !== "")
+        }
+
+        if (typeof queryKey === "string" && queryKey.trim() !== "") {
             return [queryKey];
+        }
+
         return [queryFn.name];
     }, [queryKey, queryFn.name]);
 
