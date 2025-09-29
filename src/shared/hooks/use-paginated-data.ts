@@ -31,7 +31,7 @@ interface UsePaginatedDataProperties {
     fields?: string[];
     populate?: string | string[];
     status?: 'draft' | 'published';
-    filters?: Record<string, unknown>;
+    filters?: Record<string, unknown>; // TODO: Probably remove and use column filters only
     globalSearch?: string;
 }
 
@@ -56,8 +56,6 @@ const convertSortingToStrapiFormat = (sorting: SortingState): string[] => {
 // Convert pagination state to Strapi pagination format
 const convertPaginationToStrapiFormat = (pagination: PaginationState, mode: ResolvedRenderMode, totalItems?: number) => {
     if (mode === 'client') {
-        // In client mode, fetch ALL data by using a large page size
-        // We use totalItems if available, otherwise a large number to ensure we get everything
         const clientPageSize = totalItems && totalItems > 0 ? totalItems : 1000;
         return {
             page: 1,
@@ -113,21 +111,25 @@ export default function usePaginatedData<T = unknown>({
         pageSize: initialPageSize,
     });
 
+    const [totalItems, setTotalItems] = useState(0);
+
     // Mode Resolution
     const effectiveMode = overrideRenderMode ?? DEFAULT_RENDER_MODE;
     const effectiveClientModeThreshold = overrideClientModeThreshold ?? DEFAULT_CLIENT_MODE_THRESHOLD;
 
     // Root query key resolution
     const rootKey = useMemo<(string | Record<string, unknown>)[]>(() => {
-        console.debug('Computing rootKey from queryKey:', queryKey, 'and queryFn.name:', queryFn.name);
+        // User has provided an array key
         if (Array.isArray(queryKey)) {
             return queryKey.length > 0 ? queryKey : [queryFn.name];
         }
 
+        // User has provided a non-empty string key
         if (typeof queryKey === "string" && queryKey.trim() !== "") {
             return [queryKey];
         }
 
+        // Fallback to function name as key
         return [queryFn.name];
     }, [queryKey, queryFn.name]);
 
@@ -135,21 +137,11 @@ export default function usePaginatedData<T = unknown>({
     const detectionQuery = useQuery({
         queryKey: [...rootKey, "detect"],
         queryFn: async ({ signal }) => {
-            // Debug: Detection query starting
-            // eslint-disable-next-line no-console
-            console.log('Detection query starting...', {
-                fields,
-                filters,
-                globalSearch,
-                populate,
-                status
-            });
 
-            // For detection, fetch a reasonable amount to get the real count
-            // This will tell us how many total items exist
+            // Only need to fetch a single element. Total count is in metadata
             const detectionPagination = {
                 page: 1,
-                pageSize: 1000, // Large number to get all items for counting
+                pageSize: 1,
                 withCount: true
             };
 
@@ -177,7 +169,14 @@ export default function usePaginatedData<T = unknown>({
                 promise.cancel();
             });
 
-            const result = await promise as { data: T[] };
+            const result = await promise as {
+                meta: {
+                    pagination: { total: number; page: number; pageSize: number; pageCount: number };
+                }; data: T[]
+            };
+
+            setTotalItems(result.meta.pagination.total);
+
             // eslint-disable-next-line no-console
             console.log('Detection query result:', result);
             return result;
@@ -196,9 +195,6 @@ export default function usePaginatedData<T = unknown>({
             return effectiveMode;
         }
         if (detectionQuery.isSuccess) {
-            // Use the actual total count from Strapi response
-            // Since detection query fetches all items, data.length gives us the true total
-            const totalItems = detectionQuery.data.data.length;
             // eslint-disable-next-line no-console
             console.log('Detection - resolving mode with totalItems:', totalItems);
             return totalItems <= effectiveClientModeThreshold ? "client" : "server";
@@ -240,11 +236,10 @@ export default function usePaginatedData<T = unknown>({
                 ]),
         ],
         queryFn: async ({ signal }) => {
-            const totalItems = detectionQuery.data?.data.length;
             const strapiPagination = convertPaginationToStrapiFormat(pagination, resolvedMode ?? 'server', totalItems);
 
             // eslint-disable-next-line no-console
-            console.log('Main query executing:', {
+            console.debug('Main query executing:', {
                 resolvedMode,
                 totalItems,
                 strapiPagination,
@@ -276,7 +271,15 @@ export default function usePaginatedData<T = unknown>({
                 promise.cancel();
             });
 
-            return await promise as { data: T[] };
+            const result = await promise as {
+                meta: {
+                    pagination: { total: number; page: number; pageSize: number; pageCount: number };
+                }; data: T[]
+            };
+
+            setTotalItems(result.meta.pagination.total);
+
+            return result;
         },
         enabled: enableQuery && (effectiveMode !== "auto" || detectionQuery.isSuccess || detectionQuery.isError),
         placeholderData: keepPreviousData,
@@ -286,7 +289,8 @@ export default function usePaginatedData<T = unknown>({
         refetchOnReconnect: false,
     });
 
-    // Pagination Reset Logic
+    // Pagination Reset Logic. Reset to first page if sorting or filters change
+    // We use refs to track previous values for comparison
     const previousSortString = useRef(JSON.stringify(externalSorting));
     const previousFilterString = useRef(JSON.stringify(externalColumnFilters));
 
@@ -326,12 +330,6 @@ export default function usePaginatedData<T = unknown>({
 
     // Construct the extended pagination object
     const extendedPagination = useMemo<ExtendedPagination>(() => {
-        // mainQuery.data can be undefined during initial loading
-        const apiResponse = mainQuery.data;
-        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-        const totalItems = apiResponse?.data?.length ?? 0;
-        // For now, we'll calculate total pages based on current data
-        // In a real implementation, this would come from the API
         const totalPages = Math.ceil(totalItems / pagination.pageSize);
         return {
             ...pagination,
